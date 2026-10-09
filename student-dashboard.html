@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="student">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Student Dashboard</h1>
+                    <p>Apni attendance, fees aur timetable yaha dekho</p>
+                </div>
+                <div class="profile" id="userName">Student</div>
+            </header>
+
+            <section class="cards">
+                <div class="dashboard-card">
+                    <h3>Attendance</h3>
+                    <p class="number" id="attendance">-</p>
+                    <span>Overall attendance</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Pending Fees</h3>
+                    <p class="number" id="pendingFees">-</p>
+                    <span>Baaki fees</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Courses</h3>
+                    <p class="number" id="courses">-</p>
+                    <span>This semester</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>CGPA</h3>
+                    <p class="number" id="cgpa">-</p>
+                    <span>Marks ke hisaab se</span>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Today's Timetable <span id="todayName"></span></h2>
+                <table>
+                    <thead>
+                        <tr><th>Time</th><th>Subject</th><th>Room</th></tr>
+                    </thead>
+                    <tbody id="ttRows"></tbody>
+                </table>
+                <p class="empty" id="ttEmpty" hidden>Aaj koi class nahi hai.</p>
+            </section>
+
+            <section class="section">
+                <h2>Latest Notices</h2>
+                <div id="noticeList"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+
+        function authHeaders() {
+            return { "Authorization": "Bearer " + localStorage.getItem("erpToken") };
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        async function loadSummary() {
+            try {
+                const res = await fetch(BASE + "/my/summary", { headers: authHeaders() });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const data = await res.json();
+                if (!data.ok) {
+                    alert(data.message);
+                    return;
+                }
+                document.getElementById("attendance").textContent = data.attendance + "%";
+                document.getElementById("pendingFees").textContent = "₹" + data.pending_fees.toLocaleString("en-IN");
+                document.getElementById("courses").textContent = data.courses;
+                document.getElementById("cgpa").textContent = data.cgpa === null ? "-" : data.cgpa.toFixed(2);
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function loadTimetable() {
+            try {
+                const res = await fetch(BASE + "/my/timetable", { headers: authHeaders() });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const data = await res.json();
+                if (!data.ok) {
+                    return;
+                }
+                document.getElementById("todayName").textContent = "(" + data.today + ")";
+                const today = data.entries.filter(function (e) { return e.day === data.today; });
+                document.getElementById("ttRows").innerHTML = today.map(function (e) {
+                    return "<tr><td>" + esc(e.start_time) + " - " + esc(e.end_time) + "</td><td>" +
+                        esc(e.subject) + "</td><td>" + esc(e.room) + "</td></tr>";
+                }).join("");
+                document.getElementById("ttEmpty").hidden = today.length > 0;
+            } catch (err) {
+                document.getElementById("ttEmpty").hidden = false;
+                document.getElementById("ttEmpty").textContent = "Timetable load nahi ho paya.";
+            }
+        }
+
+        async function loadNotices() {
+            const box = document.getElementById("noticeList");
+            try {
+                const res = await fetch(BASE + "/notices", { headers: authHeaders() });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const list = (await res.json()).slice(0, 3);
+                if (list.length === 0) {
+                    box.innerHTML = "<p>Abhi koi notice nahi hai.</p>";
+                    return;
+                }
+                box.innerHTML = list.map(function (n) {
+                    return '<div class="notice"><h3>' + esc(n.title) + "</h3><p>" + esc(n.message) + "</p></div>";
+                }).join("");
+            } catch (err) {
+                box.innerHTML = "<p>Notices load nahi ho paye.</p>";
+            }
+        }
+
+        loadSummary();
+        loadTimetable();
+        loadNotices();
+    </script>
+</body>
+</html>

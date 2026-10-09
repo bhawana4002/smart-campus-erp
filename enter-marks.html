@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Marks | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="faculty">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Enter Marks</h1>
+                    <p>Subject chuno aur students ke marks (100 me se) daalo</p>
+                </div>
+                <div class="profile" id="userName">Faculty</div>
+            </header>
+
+            <section class="section">
+                <h2>Subject</h2>
+                <div class="toolbar">
+                    <select id="subject">
+                        <option value="">Subject chuno</option>
+                    </select>
+                </div>
+                <p id="info"></p>
+            </section>
+
+            <section class="section" id="classSection" hidden>
+                <h2 id="classTitle">Students</h2>
+                <table>
+                    <thead>
+                        <tr><th>Roll No</th><th>Name</th><th>Marks (0-100)</th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Is course me abhi koi student nahi hai.</p>
+                <button class="action-button" id="saveBtn">Save marks</button>
+                <p id="msg"></p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+        const subjectSelect = document.getElementById("subject");
+        const classSection = document.getElementById("classSection");
+        const rows = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+        const saveBtn = document.getElementById("saveBtn");
+        const msg = document.getElementById("msg");
+        const info = document.getElementById("info");
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadSubjects() {
+            try {
+                const res = await fetch(BASE + "/my/faculty-summary", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const data = await res.json();
+                if (!data.ok) {
+                    info.textContent = data.message;
+                    return;
+                }
+                data.subjects.forEach(function (s) {
+                    const opt = document.createElement("option");
+                    opt.value = s.subject;
+                    opt.textContent = s.subject + " (" + s.course + ")";
+                    subjectSelect.appendChild(opt);
+                });
+            } catch (err) {
+                info.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        async function loadClass() {
+            const subject = subjectSelect.value;
+            msg.textContent = "";
+            if (!subject) {
+                classSection.hidden = true;
+                return;
+            }
+            try {
+                const res = await fetch(BASE + "/results/class?subject=" + encodeURIComponent(subject), {
+                    headers: authHeaders()
+                });
+                if (!checkAuth(res)) return;
+                const data = await res.json();
+                if (!data.ok) {
+                    classSection.hidden = true;
+                    info.textContent = data.message;
+                    return;
+                }
+                info.textContent = "";
+                document.getElementById("classTitle").textContent = subject + " - " + data.course;
+
+                rows.innerHTML = data.students.map(function (s) {
+                    const value = s.marks === null ? "" : s.marks;
+                    return "<tr><td>" + esc(s.roll) + "</td><td>" + esc(s.name) + "</td>" +
+                        '<td><input type="number" class="mark" min="0" max="100" data-roll="' + esc(s.roll) +
+                        '" value="' + value + '" style="width:100px; padding:8px; border:1px solid #cbd5e1; border-radius:6px;"></td></tr>';
+                }).join("");
+
+                empty.hidden = data.students.length > 0;
+                saveBtn.hidden = data.students.length === 0;
+                classSection.hidden = false;
+            } catch (err) {
+                info.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        saveBtn.addEventListener("click", async function () {
+            const marks = {};
+            document.querySelectorAll(".mark").forEach(function (input) {
+                marks[input.dataset.roll] = input.value;
+            });
+
+            const res = await fetch(BASE + "/results/save", {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({ subject: subjectSelect.value, marks: marks })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Marks save ho gaye (" + data.saved + " students).", true);
+        });
+
+        subjectSelect.addEventListener("change", loadClass);
+        loadSubjects();
+    </script>
+</body>
+</html>

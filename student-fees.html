@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Fees | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="student">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>My Fees</h1>
+                    <p>Apni fees ka hisaab yaha dekho</p>
+                </div>
+                <div class="profile" id="userName">Student</div>
+            </header>
+
+            <section class="cards">
+                <div class="dashboard-card">
+                    <h3>Total Fees</h3>
+                    <p class="number" id="total">-</p>
+                    <span>Is saal ki fees</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Paid</h3>
+                    <p class="number" id="paid">-</p>
+                    <span>Ab tak jama</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Pending</h3>
+                    <p class="number" id="pending">-</p>
+                    <span>Baaki fees</span>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Status</h2>
+                <p id="status"></p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        function rupees(n) {
+            return "₹" + n.toLocaleString("en-IN");
+        }
+
+        async function loadFees() {
+            const status = document.getElementById("status");
+            try {
+                const res = await fetch("http://127.0.0.1:5001/api/my/fees", {
+                    headers: { "Authorization": "Bearer " + localStorage.getItem("erpToken") }
+                });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const data = await res.json();
+                if (!data.ok) {
+                    status.textContent = data.message;
+                    return;
+                }
+
+                document.getElementById("total").textContent = rupees(data.total);
+                document.getElementById("paid").textContent = rupees(data.paid);
+                document.getElementById("pending").textContent = rupees(data.pending);
+
+                if (data.total === 0) {
+                    status.style.color = "#64748b";
+                    status.textContent = "Abhi aapki fees set nahi hui hai. Office se sampark karo.";
+                } else if (data.pending === 0) {
+                    status.style.color = "#16a34a";
+                    status.textContent = "Aapki saari fees jama ho chuki hai.";
+                } else {
+                    status.style.color = "#dc2626";
+                    status.textContent = rupees(data.pending) + " fees abhi baaki hai. Office me jama karo.";
+                }
+            } catch (err) {
+                status.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        loadFees();
+    </script>
+</body>
+</html>

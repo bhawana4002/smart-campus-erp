@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Admin Dashboard</h1>
+                    <p>Welcome to Smart Campus ERP</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="cards">
+                <div class="dashboard-card">
+                    <h3>Total Students</h3>
+                    <p class="number" id="totalStudents">-</p>
+                    <span>Registered students</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Total Faculty</h3>
+                    <p class="number" id="totalFaculty">-</p>
+                    <span>Faculty members</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Total Courses</h3>
+                    <p class="number" id="totalCourses">-</p>
+                    <span>Active courses</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Pending Fees</h3>
+                    <p class="number" id="pendingFees">-</p>
+                    <span>Students with pending fees</span>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Management</h2>
+                <div class="cards">
+                    <div class="dashboard-card">
+                        <h3>Student Management</h3>
+                        <p>Add, update and remove student records.</p>
+                        <button class="action-button" onclick="location.href='students.html'">Manage Students</button>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Faculty Management</h3>
+                        <p>Manage faculty information and subjects.</p>
+                        <button class="action-button" onclick="location.href='faculty.html'">Manage Faculty</button>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Course Management</h3>
+                        <p>Add and manage college courses.</p>
+                        <button class="action-button" onclick="location.href='courses.html'">Manage Courses</button>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Notice Management</h3>
+                        <p>Create and publish college notices.</p>
+                        <button class="action-button" onclick="location.href='notices.html'">Manage Notices</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Recent Notices</h2>
+                <div id="noticeList"></div>
+            </section>
+
+            <section class="section">
+                <h2>System Information</h2>
+                <table>
+                    <tr><th>Module</th><th>Status</th></tr>
+                    <tr><td>Student Management</td><td>Active</td></tr>
+                    <tr><td>Faculty Management</td><td>Active</td></tr>
+                    <tr><td>Attendance System</td><td>Active</td></tr>
+                    <tr><td>Fee Management</td><td>Active</td></tr>
+                    <tr><td>Notice System</td><td>Active</td></tr>
+                </table>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+
+        function authHeaders() {
+            return { "Authorization": "Bearer " + localStorage.getItem("erpToken") };
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        async function loadStats() {
+            const ids = ["totalStudents", "totalFaculty", "totalCourses", "pendingFees"];
+            try {
+                const res = await fetch(BASE + "/stats", { headers: authHeaders() });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById("totalStudents").textContent = data.students;
+                document.getElementById("totalFaculty").textContent = data.faculty;
+                document.getElementById("totalCourses").textContent = data.courses;
+                document.getElementById("pendingFees").textContent = data.pending_fees;
+            } catch (err) {
+                ids.forEach(function (id) {
+                    document.getElementById(id).textContent = "?";
+                });
+            }
+        }
+
+        async function loadNotices() {
+            const box = document.getElementById("noticeList");
+            try {
+                const res = await fetch(BASE + "/notices", { headers: authHeaders() });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                const list = (await res.json()).slice(0, 3);
+                if (list.length === 0) {
+                    box.innerHTML = "<p>Abhi koi notice nahi hai.</p>";
+                    return;
+                }
+                box.innerHTML = list.map(function (n) {
+                    return '<div class="notice"><h3>' + esc(n.title) + "</h3><p>" + esc(n.message) + "</p></div>";
+                }).join("");
+            } catch (err) {
+                box.innerHTML = "<p>Notices load nahi ho paye.</p>";
+            }
+        }
+
+        loadStats();
+        loadNotices();
+    </script>
+</body>
+</html>

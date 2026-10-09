@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fees | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Fees</h1>
+                    <p>Total fees set karo aur payment record karo</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Total fees set karo</h2>
+                <form class="toolbar" id="totalForm">
+                    <select id="totalStudent" required>
+                        <option value="">Student chuno</option>
+                    </select>
+                    <input id="totalAmount" type="number" min="1" placeholder="Total fees (₹)" required>
+                    <button class="action-button" type="submit">Set total</button>
+                </form>
+                <p id="totalMsg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Payment record karo</h2>
+                <form class="toolbar" id="payForm">
+                    <select id="payStudent" required>
+                        <option value="">Student chuno</option>
+                    </select>
+                    <input id="payAmount" type="number" min="1" placeholder="Jama amount (₹)" required>
+                    <button class="action-button" type="submit">Record payment</button>
+                </form>
+                <p id="payMsg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Saare students</h2>
+                <table>
+                    <thead>
+                        <tr><th>Roll No</th><th>Name</th><th>Course</th><th>Total</th><th>Paid</th><th>Pending</th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Abhi koi student nahi hai.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function rupees(n) {
+            return "₹" + n.toLocaleString("en-IN");
+        }
+
+        function showMessage(id, text, ok) {
+            const el = document.getElementById(id);
+            el.style.color = ok ? "#16a34a" : "#dc2626";
+            el.textContent = text;
+        }
+
+        function fillSelect(select, list) {
+            const keep = select.value;
+            select.innerHTML = '<option value="">Student chuno</option>' + list.map(function (s) {
+                return '<option value="' + esc(s.roll) + '">' + esc(s.name) + " (" + esc(s.roll) + ")</option>";
+            }).join("");
+            select.value = keep;
+        }
+
+        async function loadFees() {
+            try {
+                const res = await fetch(BASE + "/fees", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+
+                document.getElementById("rows").innerHTML = list.map(function (s) {
+                    const color = s.pending > 0 ? "#dc2626" : "#16a34a";
+                    return "<tr><td>" + esc(s.roll) + "</td><td>" + esc(s.name) + "</td><td>" + esc(s.course) +
+                        "</td><td>" + rupees(s.total) + "</td><td>" + rupees(s.paid) +
+                        '</td><td style="color:' + color + '"><b>' + rupees(s.pending) + "</b></td></tr>";
+                }).join("");
+                document.getElementById("empty").hidden = list.length > 0;
+
+                fillSelect(document.getElementById("totalStudent"), list);
+                fillSelect(document.getElementById("payStudent"), list);
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function send(path, body, msgId, form) {
+            const res = await fetch(BASE + path, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify(body)
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(msgId, data.message, false);
+                return;
+            }
+            showMessage(msgId, "Ho gaya.", true);
+            form.reset();
+            loadFees();
+        }
+
+        document.getElementById("totalForm").addEventListener("submit", function (e) {
+            e.preventDefault();
+            send("/fees/set-total", {
+                roll: document.getElementById("totalStudent").value,
+                total: document.getElementById("totalAmount").value
+            }, "totalMsg", this);
+        });
+
+        document.getElementById("payForm").addEventListener("submit", function (e) {
+            e.preventDefault();
+            send("/fees/payment", {
+                roll: document.getElementById("payStudent").value,
+                amount: document.getElementById("payAmount").value
+            }, "payMsg", this);
+        });
+
+        loadFees();
+    </script>
+</body>
+</html>

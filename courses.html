@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courses | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Courses</h1>
+                    <p>College ke courses add aur remove karo</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Naya course</h2>
+                <form class="toolbar" id="addForm">
+                    <input id="name" placeholder="Course ka naam (jaise B.Sc)" required>
+                    <button class="action-button" type="submit">Add course</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Saare courses</h2>
+                <table>
+                    <thead>
+                        <tr><th>#</th><th>Course</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Abhi koi course nahi hai.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const API = "http://127.0.0.1:5001/api/courses";
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadCourses() {
+            try {
+                const res = await fetch(API, { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+
+                document.getElementById("rows").innerHTML = list.map(function (c, i) {
+                    return "<tr><td>" + (i + 1) + "</td><td>" + esc(c.name) +
+                        '</td><td><button class="btn-danger" onclick="removeCourse(' + c.id +
+                        ')">Delete</button></td></tr>';
+                }).join("");
+                document.getElementById("empty").hidden = list.length > 0;
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function removeCourse(id) {
+            if (!confirm("Is course ko delete karein?")) return;
+            const res = await fetch(API + "/" + id, { method: "DELETE", headers: authHeaders() });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Course delete ho gaya.", true);
+            loadCourses();
+        }
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(API, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({ name: document.getElementById("name").value })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Course add ho gaya.", true);
+            form.reset();
+            loadCourses();
+        });
+
+        loadCourses();
+    </script>
+</body>
+</html>

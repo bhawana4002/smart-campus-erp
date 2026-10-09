@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notices | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Notices</h1>
+                    <p>Notice likho aur chuno kisko dikhana hai</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Naya notice</h2>
+                <form class="toolbar" id="addForm">
+                    <input id="title" placeholder="Title" required>
+                    <select id="audience" required>
+                        <option value="all">Sabko</option>
+                        <option value="student">Sirf students</option>
+                        <option value="faculty">Sirf faculty</option>
+                    </select>
+                    <textarea id="message" placeholder="Notice ka message" required
+                        style="flex-basis:100%; min-height:90px; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; font-size:14px;"></textarea>
+                    <button class="action-button" type="submit">Publish notice</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Saare notices</h2>
+                <div id="list"></div>
+                <p class="empty" id="empty" hidden>Abhi koi notice nahi hai.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const API = "http://127.0.0.1:5001/api/notices";
+        const AUDIENCE = { all: "Sabko", student: "Sirf students", faculty: "Sirf faculty" };
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadNotices() {
+            try {
+                const res = await fetch(API, { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+
+                document.getElementById("list").innerHTML = list.map(function (n) {
+                    return '<div class="notice"><h3>' + esc(n.title) + "</h3><p>" + esc(n.message) + "</p>" +
+                        '<p style="margin-top:8px; font-size:13px;">' + esc(AUDIENCE[n.audience] || n.audience) +
+                        " | " + esc(n.created_at) + "</p>" +
+                        '<button class="btn-danger" style="margin-top:8px;" onclick="removeNotice(' + n.id +
+                        ')">Delete</button></div>';
+                }).join("");
+                document.getElementById("empty").hidden = list.length > 0;
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function removeNotice(id) {
+            if (!confirm("Is notice ko delete karein?")) return;
+            const res = await fetch(API + "/" + id, { method: "DELETE", headers: authHeaders() });
+            if (!checkAuth(res)) return;
+            loadNotices();
+        }
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(API, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    title: document.getElementById("title").value,
+                    message: document.getElementById("message").value,
+                    audience: document.getElementById("audience").value
+                })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Notice publish ho gaya.", true);
+            form.reset();
+            loadNotices();
+        });
+
+        loadNotices();
+    </script>
+</body>
+</html>

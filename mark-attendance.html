@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark Attendance | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="faculty">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Mark Attendance</h1>
+                    <p>Subject chuno aur present students ko tick karo</p>
+                </div>
+                <div class="profile" id="userName">Faculty</div>
+            </header>
+
+            <section class="section">
+                <h2>Subject</h2>
+                <div class="toolbar">
+                    <select id="subject">
+                        <option value="">Subject chuno</option>
+                    </select>
+                </div>
+                <p id="info"></p>
+            </section>
+
+            <section class="section" id="classSection" hidden>
+                <h2 id="classTitle">Students</h2>
+                <table>
+                    <thead>
+                        <tr><th>Roll No</th><th>Name</th><th>Present</th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Is course me abhi koi student nahi hai.</p>
+                <button class="action-button" id="submitBtn">Submit attendance</button>
+                <p id="msg"></p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+        const subjectSelect = document.getElementById("subject");
+        const classSection = document.getElementById("classSection");
+        const rows = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+        const submitBtn = document.getElementById("submitBtn");
+        const msg = document.getElementById("msg");
+        const info = document.getElementById("info");
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadSubjects() {
+            try {
+                const res = await fetch(BASE + "/my/faculty-summary", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const data = await res.json();
+                if (!data.ok) {
+                    info.textContent = data.message;
+                    return;
+                }
+                data.subjects.forEach(function (s) {
+                    const opt = document.createElement("option");
+                    opt.value = s.subject;
+                    opt.textContent = s.subject + " (" + s.course + ")";
+                    subjectSelect.appendChild(opt);
+                });
+            } catch (err) {
+                info.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        async function loadClass() {
+            const subject = subjectSelect.value;
+            msg.textContent = "";
+            if (!subject) {
+                classSection.hidden = true;
+                return;
+            }
+            try {
+                const res = await fetch(BASE + "/attendance/class?subject=" + encodeURIComponent(subject), {
+                    headers: authHeaders()
+                });
+                if (!checkAuth(res)) return;
+                const data = await res.json();
+                if (!data.ok) {
+                    classSection.hidden = true;
+                    info.textContent = data.message;
+                    return;
+                }
+                info.textContent = "";
+                document.getElementById("classTitle").textContent = subject + " - " + data.course;
+
+                rows.innerHTML = data.students.map(function (s) {
+                    return "<tr><td>" + esc(s.roll) + "</td><td>" + esc(s.name) + "</td>" +
+                        '<td><label><input type="checkbox" class="pres" value="' + esc(s.roll) +
+                        '" checked> Present</label></td></tr>';
+                }).join("");
+
+                empty.hidden = data.students.length > 0;
+                submitBtn.hidden = data.students.length === 0;
+                submitBtn.disabled = data.already_marked;
+                if (data.already_marked) {
+                    showMessage("Aaj ki attendance pehle se lag chuki hai.", false);
+                }
+                classSection.hidden = false;
+            } catch (err) {
+                info.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        submitBtn.addEventListener("click", async function () {
+            const present = Array.from(document.querySelectorAll(".pres:checked")).map(function (c) {
+                return c.value;
+            });
+            const res = await fetch(BASE + "/attendance/mark", {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({ subject: subjectSelect.value, present: present })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Attendance lag gayi: " + data.total + " me se " + data.present + " present.", true);
+            submitBtn.disabled = true;
+        });
+
+        subjectSelect.addEventListener("change", loadClass);
+        loadSubjects();
+    </script>
+</body>
+</html>

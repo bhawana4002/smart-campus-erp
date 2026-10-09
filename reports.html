@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Reports</h1>
+                    <p>Attendance, fees aur results ka saar</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="cards">
+                <div class="dashboard-card">
+                    <h3>Total Students</h3>
+                    <p class="number" id="cStudents">-</p>
+                    <span>Registered</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Kam Attendance</h3>
+                    <p class="number" id="cLow">-</p>
+                    <span id="cLowNote">Students</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Fees Collected</h3>
+                    <p class="number" id="cPaid">-</p>
+                    <span id="cPaidNote">Total me se</span>
+                </div>
+                <div class="dashboard-card">
+                    <h3>Collection</h3>
+                    <p class="number" id="cPercent">-</p>
+                    <span id="cPendingNote">Baaki fees</span>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>Course-wise report</h2>
+                <table>
+                    <thead>
+                        <tr><th>Course</th><th>Students</th><th>Avg attendance</th><th>Avg CGPA</th><th>Fees total</th><th>Fees jama</th><th>Fees baaki</th></tr>
+                    </thead>
+                    <tbody id="courseRows"></tbody>
+                </table>
+                <p class="empty" id="courseEmpty" hidden>Abhi koi student nahi hai.</p>
+            </section>
+
+            <section class="section">
+                <h2>Student-wise report</h2>
+                <div class="toolbar">
+                    <select id="filter">
+                        <option value="all">Saare students</option>
+                        <option value="low">Kam attendance wale</option>
+                        <option value="pending">Fees baaki wale</option>
+                    </select>
+                    <input id="search" placeholder="Name ya roll number se dhundo">
+                    <button class="action-button" id="csvBtn" type="button">CSV download</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Roll No</th><th>Name</th><th>Course</th><th>Attendance</th><th>Fees baaki</th><th>CGPA</th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Koi student nahi mila.</p>
+                <p id="info"></p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        let report = null;
+        const info = document.getElementById("info");
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function rupees(n) {
+            return "₹" + n.toLocaleString("en-IN");
+        }
+
+        function dash(v, suffix) {
+            return v === null ? "-" : v + (suffix || "");
+        }
+
+        // CSV me '=' se shuru hone wale text ko Excel formula na samjhe, isliye aage ' laga dete hain
+        function csvCell(v) {
+            let s = v === null || v === undefined ? "" : String(v);
+            if (/^[=+\-@]/.test(s)) s = "'" + s;
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+
+        function filtered() {
+            const mode = document.getElementById("filter").value;
+            const q = document.getElementById("search").value.toLowerCase();
+            const limit = report.summary.low_limit;
+            return report.students.filter(function (s) {
+                if (mode === "low" && !(s.attendance !== null && s.attendance < limit)) return false;
+                if (mode === "pending" && !(s.fees_pending > 0)) return false;
+                return s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q);
+            });
+        }
+
+        function renderStudents() {
+            const list = filtered();
+            const limit = report.summary.low_limit;
+            document.getElementById("rows").innerHTML = list.map(function (s) {
+                const low = s.attendance !== null && s.attendance < limit;
+                const attStyle = low ? ' style="color:#dc2626"' : "";
+                const feeStyle = s.fees_pending > 0 ? ' style="color:#dc2626"' : "";
+                return "<tr><td>" + esc(s.roll) + "</td><td>" + esc(s.name) + "</td><td>" + esc(s.course) +
+                    "</td><td" + attStyle + "><b>" + dash(s.attendance, "%") + "</b></td><td" + feeStyle + ">" +
+                    rupees(s.fees_pending) + "</td><td>" + (s.cgpa === null ? "-" : s.cgpa.toFixed(2)) + "</td></tr>";
+            }).join("");
+            document.getElementById("empty").hidden = list.length > 0;
+        }
+
+        function renderAll() {
+            const s = report.summary;
+            document.getElementById("cStudents").textContent = s.students;
+            document.getElementById("cLow").textContent = s.low_attendance;
+            document.getElementById("cLowNote").textContent = s.low_limit + "% se neeche";
+            document.getElementById("cPaid").textContent = rupees(s.fees_paid);
+            document.getElementById("cPaidNote").textContent = rupees(s.fees_total) + " me se";
+            document.getElementById("cPercent").textContent = s.collection_percent + "%";
+            document.getElementById("cPendingNote").textContent = rupees(s.fees_pending) + " baaki";
+
+            document.getElementById("courseRows").innerHTML = report.courses.map(function (c) {
+                return "<tr><td>" + esc(c.course) + "</td><td>" + c.students + "</td><td>" +
+                    dash(c.avg_attendance, "%") + "</td><td>" + (c.avg_cgpa === null ? "-" : c.avg_cgpa.toFixed(2)) +
+                    "</td><td>" + rupees(c.fees_total) + "</td><td>" + rupees(c.fees_paid) + "</td><td>" +
+                    rupees(c.fees_pending) + "</td></tr>";
+            }).join("");
+            document.getElementById("courseEmpty").hidden = report.courses.length > 0;
+
+            renderStudents();
+        }
+
+        document.getElementById("csvBtn").addEventListener("click", function () {
+            if (!report) return;
+            const header = ["Roll", "Name", "Course", "Attendance %", "Fees pending", "CGPA"];
+            const lines = [header.map(csvCell).join(",")];
+            filtered().forEach(function (s) {
+                lines.push([s.roll, s.name, s.course, s.attendance, s.fees_pending, s.cgpa].map(csvCell).join(","));
+            });
+            const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "students-report.csv";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById("filter").addEventListener("change", function () { if (report) renderStudents(); });
+        document.getElementById("search").addEventListener("input", function () { if (report) renderStudents(); });
+
+        async function loadReport() {
+            try {
+                const res = await fetch("http://127.0.0.1:5001/api/reports", {
+                    headers: { "Authorization": "Bearer " + localStorage.getItem("erpToken") }
+                });
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                report = await res.json();
+                renderAll();
+            } catch (err) {
+                info.textContent = "Server se connect nahi ho paya. Backend chalu hai?";
+            }
+        }
+
+        loadReport();
+    </script>
+</body>
+</html>

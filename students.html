@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Students | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Students</h1>
+                    <p>Add, search and remove student records</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Add student</h2>
+                <form class="toolbar" id="addForm">
+                    <input id="name" placeholder="Full name" required>
+                    <input id="roll" placeholder="Roll number" required>
+                    <select id="course" required>
+                        <option value="">Course</option>
+                    </select>
+                    <input id="email" type="email" placeholder="Email (login ke liye)" required>
+                    <input id="password" type="password" placeholder="Login password (kam se kam 6)" minlength="6" required>
+                    <button class="action-button" type="submit">Add student</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <div class="toolbar">
+                    <input id="search" placeholder="Search by name or roll number">
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Roll No</th><th>Name</th><th>Course</th><th>Email</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Koi student nahi mila. Upar se naya student add karo.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const API = "http://127.0.0.1:5001/api/students";
+        let students = [];
+        const rows = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadCourses() {
+            try {
+                const res = await fetch("http://127.0.0.1:5001/api/courses", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+                document.getElementById("course").innerHTML = '<option value="">Course</option>' +
+                    list.map(function (c) {
+                        return '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>";
+                    }).join("");
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function loadStudents() {
+            try {
+                const res = await fetch(API, { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                students = await res.json();
+                render();
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        function render() {
+            const q = document.getElementById("search").value.toLowerCase();
+            const list = students.filter(s => s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q));
+            rows.innerHTML = list.map(s =>
+                "<tr><td>" + esc(s.roll) + "</td><td>" + esc(s.name) + "</td><td>" + esc(s.course) +
+                "</td><td>" + esc(s.email) + '</td><td><button class="btn-danger" onclick="removeStudent(\'' +
+                esc(s.roll) + "')\">Delete</button></td></tr>"
+            ).join("");
+            empty.hidden = list.length > 0;
+        }
+
+        async function removeStudent(roll) {
+            if (!confirm("Is student ko delete karein? Uska login, attendance aur fees bhi hat jayegi.")) return;
+            const res = await fetch(API + "/" + encodeURIComponent(roll), {
+                method: "DELETE",
+                headers: authHeaders()
+            });
+            if (!checkAuth(res)) return;
+            loadStudents();
+        }
+
+        document.getElementById("search").addEventListener("input", render);
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(API, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    roll: document.getElementById("roll").value,
+                    name: document.getElementById("name").value,
+                    course: document.getElementById("course").value,
+                    email: document.getElementById("email").value,
+                    password: document.getElementById("password").value
+                })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Student add ho gaya. Ab wo apne email aur diye gaye password se login kar sakta hai.", true);
+            form.reset();
+            loadStudents();
+        });
+
+        loadCourses();
+        loadStudents();
+    </script>
+</body>
+</html>

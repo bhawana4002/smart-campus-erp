@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timetable | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Timetable</h1>
+                    <p>Class ka din, time aur room set karo</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Nayi class</h2>
+                <form class="toolbar" id="addForm">
+                    <select id="subject" required>
+                        <option value="">Subject chuno</option>
+                    </select>
+                    <select id="day" required>
+                        <option value="">Din chuno</option>
+                        <option>Monday</option>
+                        <option>Tuesday</option>
+                        <option>Wednesday</option>
+                        <option>Thursday</option>
+                        <option>Friday</option>
+                        <option>Saturday</option>
+                    </select>
+                    <input id="start" type="time" required title="Start time">
+                    <input id="end" type="time" required title="End time">
+                    <input id="room" placeholder="Room (jaise Room 201)" maxlength="30" required>
+                    <button class="action-button" type="submit">Add class</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Poora timetable</h2>
+                <table>
+                    <thead>
+                        <tr><th>Din</th><th>Time</th><th>Subject</th><th>Course</th><th>Faculty</th><th>Room</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Abhi koi class set nahi hai.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadSubjects() {
+            try {
+                const res = await fetch(BASE + "/subjects", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+                document.getElementById("subject").innerHTML = '<option value="">Subject chuno</option>' +
+                    list.map(function (s) {
+                        const who = s.faculty_name || s.emp_id;
+                        return '<option value="' + s.id + '">' + esc(s.subject) + " - " + esc(s.course) +
+                            " (" + esc(who) + ")</option>";
+                    }).join("");
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function loadTimetable() {
+            try {
+                const res = await fetch(BASE + "/timetable", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+
+                document.getElementById("rows").innerHTML = list.map(function (e) {
+                    return "<tr><td>" + esc(e.day) + "</td><td>" + esc(e.start_time) + " - " + esc(e.end_time) +
+                        "</td><td>" + esc(e.subject) + "</td><td>" + esc(e.course) + "</td><td>" +
+                        esc(e.faculty_name || e.emp_id) + "</td><td>" + esc(e.room) +
+                        '</td><td><button class="btn-danger" onclick="removeEntry(' + e.id +
+                        ')">Hatao</button></td></tr>';
+                }).join("");
+                document.getElementById("empty").hidden = list.length > 0;
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function removeEntry(id) {
+            if (!confirm("Is class ko timetable se hatayein?")) return;
+            const res = await fetch(BASE + "/timetable/" + id, { method: "DELETE", headers: authHeaders() });
+            if (!checkAuth(res)) return;
+            loadTimetable();
+        }
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(BASE + "/timetable", {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    subject_id: document.getElementById("subject").value,
+                    day: document.getElementById("day").value,
+                    start_time: document.getElementById("start").value,
+                    end_time: document.getElementById("end").value,
+                    room: document.getElementById("room").value
+                })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Class timetable me add ho gayi.", true);
+            form.reset();
+            loadTimetable();
+        });
+
+        loadSubjects();
+        loadTimetable();
+    </script>
+</body>
+</html>

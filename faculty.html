@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Faculty</h1>
+                    <p>Add, search and remove faculty records</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Add faculty</h2>
+                <form class="toolbar" id="addForm">
+                    <input id="name" placeholder="Full name" required>
+                    <input id="empId" placeholder="Employee ID" required>
+                    <select id="department" required>
+                        <option value="">Department</option>
+                        <option>Computer Science</option>
+                        <option>Electronics</option>
+                        <option>Mechanical</option>
+                        <option>Management</option>
+                    </select>
+                    <input id="email" type="email" placeholder="Email (login ke liye)" required>
+                    <input id="password" type="password" placeholder="Login password (kam se kam 6)" minlength="6" required>
+                    <button class="action-button" type="submit">Add faculty</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <div class="toolbar">
+                    <input id="search" placeholder="Search by name or employee ID">
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>Emp ID</th><th>Name</th><th>Department</th><th>Email</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Koi faculty nahi mila. Upar se naya faculty add karo.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const API = "http://127.0.0.1:5001/api/faculty";
+        let faculty = [];
+        const rows = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadFaculty() {
+            try {
+                const res = await fetch(API, { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                faculty = await res.json();
+                render();
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        function render() {
+            const q = document.getElementById("search").value.toLowerCase();
+            const list = faculty.filter(f => f.name.toLowerCase().includes(q) || f.emp_id.toLowerCase().includes(q));
+            rows.innerHTML = list.map(f =>
+                "<tr><td>" + esc(f.emp_id) + "</td><td>" + esc(f.name) + "</td><td>" + esc(f.department) +
+                "</td><td>" + esc(f.email) + '</td><td><button class="btn-danger" onclick="removeFaculty(\'' +
+                esc(f.emp_id) + "')\">Delete</button></td></tr>"
+            ).join("");
+            empty.hidden = list.length > 0;
+        }
+
+        async function removeFaculty(empId) {
+            if (!confirm("Is faculty ko delete karein? Uska login aur subject assignments bhi hat jayenge.")) return;
+            const res = await fetch(API + "/" + encodeURIComponent(empId), {
+                method: "DELETE",
+                headers: authHeaders()
+            });
+            if (!checkAuth(res)) return;
+            loadFaculty();
+        }
+
+        document.getElementById("search").addEventListener("input", render);
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(API, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    emp_id: document.getElementById("empId").value,
+                    name: document.getElementById("name").value,
+                    department: document.getElementById("department").value,
+                    email: document.getElementById("email").value,
+                    password: document.getElementById("password").value
+                })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Faculty add ho gaya. Ab wo apne email aur diye gaye password se login kar sakta hai.", true);
+            form.reset();
+            loadFaculty();
+        });
+
+        loadFaculty();
+    </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subjects | Smart Campus ERP</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body data-role="admin">
+    <div class="dashboard-container">
+
+        <div id="sidebar"></div>
+
+        <main class="main-content">
+
+            <header class="topbar">
+                <div>
+                    <h1>Subjects</h1>
+                    <p>Faculty ko subject assign karo</p>
+                </div>
+                <div class="profile" id="userName">Admin</div>
+            </header>
+
+            <section class="section">
+                <h2>Subject assign karo</h2>
+                <form class="toolbar" id="addForm">
+                    <select id="faculty" required>
+                        <option value="">Faculty chuno</option>
+                    </select>
+                    <input id="subject" placeholder="Subject ka naam" required>
+                    <select id="course" required>
+                        <option value="">Course chuno</option>
+                    </select>
+                    <button class="action-button" type="submit">Assign</button>
+                </form>
+                <p id="msg"></p>
+            </section>
+
+            <section class="section">
+                <h2>Saare assignments</h2>
+                <table>
+                    <thead>
+                        <tr><th>Subject</th><th>Course</th><th>Faculty</th><th></th></tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                </table>
+                <p class="empty" id="empty" hidden>Abhi koi subject assign nahi hai.</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="layout.js"></script>
+    <script>
+        const BASE = "http://127.0.0.1:5001/api";
+
+        function authHeaders() {
+            return {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + localStorage.getItem("erpToken")
+            };
+        }
+
+        // Token galat ya expire ho to wapas login page
+        function checkAuth(res) {
+            if (res.status === 401) {
+                logout();
+                return false;
+            }
+            return true;
+        }
+
+        function esc(t) {
+            const d = document.createElement("div");
+            d.textContent = t;
+            return d.innerHTML;
+        }
+
+        function showMessage(text, ok) {
+            const msg = document.getElementById("msg");
+            msg.style.color = ok ? "#16a34a" : "#dc2626";
+            msg.textContent = text;
+        }
+
+        async function loadOptions() {
+            try {
+                const [fRes, cRes] = await Promise.all([
+                    fetch(BASE + "/faculty", { headers: authHeaders() }),
+                    fetch(BASE + "/courses", { headers: authHeaders() })
+                ]);
+                if (!checkAuth(fRes) || !checkAuth(cRes)) return;
+                const faculty = await fRes.json();
+                const courses = await cRes.json();
+
+                document.getElementById("faculty").innerHTML = '<option value="">Faculty chuno</option>' +
+                    faculty.map(function (f) {
+                        return '<option value="' + esc(f.emp_id) + '">' + esc(f.name) + " (" + esc(f.emp_id) + ")</option>";
+                    }).join("");
+                document.getElementById("course").innerHTML = '<option value="">Course chuno</option>' +
+                    courses.map(function (c) {
+                        return '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>";
+                    }).join("");
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function loadSubjects() {
+            try {
+                const res = await fetch(BASE + "/subjects", { headers: authHeaders() });
+                if (!checkAuth(res)) return;
+                const list = await res.json();
+
+                document.getElementById("rows").innerHTML = list.map(function (s) {
+                    const who = s.faculty_name ? esc(s.faculty_name) + " (" + esc(s.emp_id) + ")" : esc(s.emp_id);
+                    return "<tr><td>" + esc(s.subject) + "</td><td>" + esc(s.course) + "</td><td>" + who +
+                        '</td><td><button class="btn-danger" onclick="removeSubject(' + s.id +
+                        ')">Hatao</button></td></tr>';
+                }).join("");
+                document.getElementById("empty").hidden = list.length > 0;
+            } catch (err) {
+                alert("Server se connect nahi ho paya. Backend chalu hai?");
+            }
+        }
+
+        async function removeSubject(id) {
+            if (!confirm("Is assignment ko hatayein?")) return;
+            const res = await fetch(BASE + "/subjects/" + id, { method: "DELETE", headers: authHeaders() });
+            if (!checkAuth(res)) return;
+            loadSubjects();
+        }
+
+        document.getElementById("addForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+            const form = this;
+            const res = await fetch(BASE + "/subjects", {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    emp_id: document.getElementById("faculty").value,
+                    subject: document.getElementById("subject").value,
+                    course: document.getElementById("course").value
+                })
+            });
+            if (!checkAuth(res)) return;
+            const data = await res.json();
+            if (!data.ok) {
+                showMessage(data.message, false);
+                return;
+            }
+            showMessage("Subject assign ho gaya.", true);
+            form.reset();
+            loadSubjects();
+        });
+
+        loadOptions();
+        loadSubjects();
+    </script>
+</body>
+</html>
